@@ -30,31 +30,18 @@
 //  PROTOTIPOS
 //===================================================
 
+/// @brief Configuraca do Pino PWM 
+void PWM_setup(void);
+
 //===================================================
 //  MAIN
 //===================================================
 int main()
 {
-    DDRB = (1 << DDB1);
-    PORTB = 0x00;
-
-    TCCR1A = (1 << COM1A1) | (1 << WGM11);
-    TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
-
-    ICR1 = TOP_COUNTER_VALUE;
-
-    OCR1A = 2000;
-
     sei(); // Ativa as interrupcoes globais
 
-    uint16_t temp = 20000;
     for (;;)
     {
-        if (temp >= 4000)
-            temp = 400;
-        OCR1A = temp;
-        temp += 100;
-        _delay_ms(100);
     }
 
     cli(); // Desativa as interrupcoes globais
@@ -64,3 +51,20 @@ int main()
 //===================================================
 //  FUNCOES
 //===================================================
+
+void PWM_setup(void)
+{
+    // GPIO OC1A como output
+    DDRB = (1 << DDB1);
+    PORTB = 0x00;
+
+    // Configura o TIMER 1 como FAST PWM com
+    // configuracao do TOp em ICR1 e mudanca do
+    // duty cycle no OCR1A (Prescale de 8)
+    TCCR1A = (1 << COM1A1) | (1 << WGM11);
+    TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
+
+    ICR1 = TOP_COUNTER_VALUE;
+
+    OCR1A = 4000;
+}
