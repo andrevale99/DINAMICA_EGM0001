@@ -23,6 +23,9 @@
 // Partindo do centro: -+60 Graus
 #define MG995_MAX_DEGREE 4000
 
+/// Mapeamento do Duty Cycle do PWM para o servo
+#define MAP_DUTY_CYCLE(ADC_VALUE) ((ADC_VALUE << 2) + 1000)
+
 //===================================================
 //  VARIAVEIS
 //===================================================
@@ -31,8 +34,16 @@
 //  PROTOTIPOS
 //===================================================
 
-/// @brief Configuraca do Pino PWM
+/// @brief Configuracao do Pino PWM
 void PWM_setup(void);
+
+/// @brief Configuracao do ADC
+void ADC_setup(void);
+
+/// @brief Leitura do canal ADC
+/// @param pino Canal de leitura
+/// @return Valor do adc em uma variavel de 16 bits
+uint16_t ADC_read(uint8_t pino);
 
 //===================================================
 //  MAIN
@@ -40,10 +51,13 @@ void PWM_setup(void);
 int main()
 {
     PWM_setup();
+    ADC_setup();
     sei(); // Ativa as interrupcoes globais
 
     for (;;)
     {
+        OCR1A = MAP_DUTY_CYCLE(ADC_read(0x00));
+        OCR1B = MAP_DUTY_CYCLE(ADC_read(0x00));
     }
 
     cli(); // Desativa as interrupcoes globais
@@ -70,4 +84,32 @@ void PWM_setup(void)
 
     OCR1A = MG995_MAX_DEGREE;
     OCR1B = MG995_MAX_DEGREE / 2;
+}
+
+void ADC_setup(void)
+{
+    ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+    ADMUX = (1 << REFS0);
+}
+
+uint16_t ADC_read(uint8_t pino)
+{
+    static uint8_t adc_LSB;
+    static uint8_t adc_MSB;
+
+    ADMUX |= pino;
+
+    ADCSRA |= (1 << ADSC);
+
+    while (!(ADCSRA &= ~(1 << ADIF)))
+        ;
+
+    ADCSRA |= (1 << ADIF);
+
+    adc_LSB = ADCL;
+    adc_MSB = ADCH;
+
+    ADCSRA |= (1 << ADSC);
+
+    return (adc_MSB << 8) | adc_LSB;
 }
