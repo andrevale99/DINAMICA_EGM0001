@@ -9,11 +9,11 @@
 #define F_CPU 16000000UL
 #endif
 
+#include <stdint.h>
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
-
-#include <stdint.h>
 
 // O servo MG995 tem um periodo de 50 Hz
 // com variancia do duty cycle
@@ -25,6 +25,12 @@
 
 /// Mapeamento do Duty Cycle do PWM para o servo
 #define MAP_DUTY_CYCLE(ADC_VALUE) ((ADC_VALUE << 2) + 1000)
+
+// Bauda rate da comunicacao serial
+#define BAUD 9600
+
+// Calculo do UBRR especificado no datasheet
+#define MYUBRR F_CPU / 16 / BAUD - 1
 
 //===================================================
 //  VARIAVEIS
@@ -45,6 +51,24 @@ void ADC_setup(void);
 /// @return Valor do adc em uma variavel de 16 bits
 uint16_t ADC_read(uint8_t pino);
 
+/**
+ * @brief Inicializacao do USART
+ * @param ubrr Valor calculado do baud rate
+ *
+ * @note A definicao MYUBRR ja faz o calculo (datasheet)
+ * e inicializa somento o TX, para o RX (1<<RXEN0) no
+ * registrador UCSR0B
+ */
+void USART_setup(unsigned int ubrr);
+
+/**
+ * @brief Transmissao de um byte pelo USART0
+ * @param data caractere
+ *
+ * @note Essa funcao é utilizada quando nao for utilizada
+ * as interrupcoes para envio de dado
+ */
+void USART_Transmit(unsigned char data);
 //===================================================
 //  MAIN
 //===================================================
@@ -52,12 +76,18 @@ int main()
 {
     PWM_setup();
     ADC_setup();
-    sei(); // Ativa as interrupcoes globais
+    USART_setup(MYUBRR);
+    // sei(); // Ativa as interrupcoes globais
 
     for (;;)
     {
         OCR1A = MAP_DUTY_CYCLE(ADC_read(0x00));
         OCR1B = MAP_DUTY_CYCLE(ADC_read(0x00));
+
+        // for (char *i = &m[0]; *i != '\0'; ++i)
+        //     USART_Transmit(*i);
+
+        _delay_ms(100);
     }
 
     cli(); // Desativa as interrupcoes globais
@@ -82,8 +112,10 @@ void PWM_setup(void)
 
     ICR1 = TOP_COUNTER_VALUE;
 
-    OCR1A = MG995_MAX_DEGREE;
-    OCR1B = MG995_MAX_DEGREE / 2;
+    // numero magico para comecar no menor angulo
+    // do servo
+    OCR1A = 1000;
+    OCR1B = 1000;
 }
 
 void ADC_setup(void)
@@ -112,4 +144,26 @@ uint16_t ADC_read(uint8_t pino)
     ADCSRA |= (1 << ADSC);
 
     return (adc_MSB << 8) | adc_LSB;
+}
+
+void USART_setup(unsigned int ubrr)
+{
+    /*Set baud rate */
+    UBRR0H = (unsigned char)(ubrr >> 8);
+    UBRR0L = (unsigned char)ubrr;
+
+    // Enable transmitter
+    UCSR0B = (1 << TXEN0);
+
+    /* Set frame format: 8data, 2stop bit */
+    UCSR0C = (3 << UCSZ00) | (0 << USBS0);
+}
+
+void USART_Transmit(unsigned char data)
+{
+    /* Wait for empty transmit buffer */
+    while (!(UCSR0A & (1 << UDRE0)))
+        ;
+    /* Put data into buffer, sends the data */
+    UDR0 = data;
 }
