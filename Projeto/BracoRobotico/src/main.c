@@ -2,7 +2,7 @@
  * @author Andre Menezes de Freitas Vale
  *
  * @brief Código para a matéria de dinamica.
- * Controlar um braço articulado
+ * Controlar um braço articulado.
  */
 
 #ifndef F_CPU
@@ -23,6 +23,9 @@
 /// Mapeamento do Duty Cycle do PWM para o servo
 #define MAP_DUTY_CYCLE(ADC_VALUE) ((ADC_VALUE << 2) + 1000)
 
+/// Converte o valor do contador do timer para ms
+#define TicksTIMER_to_MS(value) (value / 20)
+
 // Bauda rate da comunicacao serial
 #define BAUD 9600
 
@@ -35,6 +38,8 @@
 //===================================================
 //  VARIAVEIS
 //===================================================
+
+volatile uint16_t i8CounterAmostragem = 0;
 
 //===================================================
 //  PROTOTIPOS
@@ -75,6 +80,8 @@ void USART_setup(unsigned int ubrr);
  * as interrupcoes para envio de dado
  */
 void USART_Transmit(unsigned char data);
+
+ISR(TIMER1_OVF_vect);
 //===================================================
 //  MAIN
 //===================================================
@@ -83,15 +90,13 @@ int main()
     PWM_setup();
     ADC_setup();
     USART_setup(MYUBRR);
-    // sei(); // Ativa as interrupcoes globais
 
-    #define LEN 5
-    float theta[LEN] = {0, 45, 90, 120, 180};
-    uint8_t idx = 0;
+    sei(); // Ativa as interrupcoes globais
+
     for (;;)
     {
-        OCR1A = angle(LINEAR_A_SERVO, LINEAR_B_SERVO, theta[(idx++) % 5]);
-        _delay_ms(2000);
+        // OCR1A = angle(LINEAR_A_SERVO, LINEAR_B_SERVO, theta[(idx++) % 10]);
+        // _delay_ms(100);
     }
 
     cli(); // Desativa as interrupcoes globais
@@ -114,6 +119,9 @@ void PWM_setup(void)
     // do clock
     TCCR1A = (1 << COM1A1) | (1 << COM1B1) | (1 << WGM11);
     TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
+
+    // Interrupcao do overflow do timer 1
+    TIMSK1 = (1 << TOIE1);
 
     ICR1 = TOP_COUNTER_VALUE;
 
@@ -176,4 +184,12 @@ void USART_Transmit(unsigned char data)
         ;
     /* Put data into buffer, sends the data */
     UDR0 = data;
+}
+
+ISR(TIMER1_OVF_vect)
+{
+    if (i8CounterAmostragem > TicksTIMER_to_MS(100))
+    {
+    }
+    i8CounterAmostragem++;
 }
