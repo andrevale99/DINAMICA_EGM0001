@@ -39,7 +39,11 @@
 //  VARIAVEIS
 //===================================================
 
-volatile uint16_t i8CounterAmostragem = 0;
+volatile uint16_t ui16CounterAmostragem = 0;
+
+#define LEN 10
+volatile uint8_t idx = 0;
+uint8_t theta[LEN] = {0, 15, 30, 45, 60, 75, 90, 115, 130, 180};
 
 //===================================================
 //  PROTOTIPOS
@@ -95,7 +99,6 @@ int main()
 
     for (;;)
     {
-        // OCR1A = angle(LINEAR_A_SERVO, LINEAR_B_SERVO, theta[(idx++) % 10]);
         // _delay_ms(100);
     }
 
@@ -188,8 +191,11 @@ void USART_Transmit(unsigned char data)
 
 ISR(TIMER1_OVF_vect)
 {
-    if (i8CounterAmostragem > TicksTIMER_to_MS(100))
+    if (ui16CounterAmostragem > TicksTIMER_to_MS(1000))
     {
+        idx++;
+        OCR1A = angle(LINEAR_A_SERVO, LINEAR_B_SERVO, theta[idx % 10]);
+        ui16CounterAmostragem = 0;
     }
-    i8CounterAmostragem++;
+    ui16CounterAmostragem++;
 }
