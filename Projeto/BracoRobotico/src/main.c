@@ -10,6 +10,7 @@
 #endif
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -19,18 +20,17 @@
 // com variancia do duty cycle
 #define TOP_COUNTER_VALUE 40000
 
-// O MG995 tem uma liberdade de 120 Graus
-// Partindo do centro: -+60 Graus
-#define MG995_MAX_DEGREE 4000
-
 /// Mapeamento do Duty Cycle do PWM para o servo
 #define MAP_DUTY_CYCLE(ADC_VALUE) ((ADC_VALUE << 2) + 1000)
 
 // Bauda rate da comunicacao serial
 #define BAUD 9600
 
-// Calculo do UBRR especificado no datasheet
+// Calculo do UBRR, especificado no datasheet
 #define MYUBRR F_CPU / 16 / BAUD - 1
+
+#define LINEAR_A_SERVO ((float)0.0440)
+#define LINEAR_B_SERVO ((float)-44.0480)
 
 //===================================================
 //  VARIAVEIS
@@ -51,13 +51,19 @@ void ADC_setup(void);
 /// @return Valor do adc em uma variavel de 16 bits
 uint16_t ADC_read(uint8_t pino);
 
+/// @brief Mapeamento do angulo do servo de theta(graus) para PWM
+/// @param a valor da constante da linearizacao (a*x + b = y)
+/// @param b valor da constante independente (a*x + b = y)
+/// @param theta valor em graus
+/// @return Retorna um valor de 16 bits do mapeamento
+uint16_t angle(float a, float b, float theta);
+
 /**
  * @brief Inicializacao do USART
  * @param ubrr Valor calculado do baud rate
  *
  * @note A definicao MYUBRR ja faz o calculo (datasheet)
- * e inicializa somento o TX, para o RX (1<<RXEN0) no
- * registrador UCSR0B
+ * e inicializa somento o TX.
  */
 void USART_setup(unsigned int ubrr);
 
@@ -79,15 +85,13 @@ int main()
     USART_setup(MYUBRR);
     // sei(); // Ativa as interrupcoes globais
 
+    #define LEN 5
+    float theta[LEN] = {0, 45, 90, 120, 180};
+    uint8_t idx = 0;
     for (;;)
     {
-        OCR1A = MAP_DUTY_CYCLE(ADC_read(0x00));
-        OCR1B = MAP_DUTY_CYCLE(ADC_read(0x00));
-
-        // for (char *i = &m[0]; *i != '\0'; ++i)
-        //     USART_Transmit(*i);
-
-        _delay_ms(100);
+        OCR1A = angle(LINEAR_A_SERVO, LINEAR_B_SERVO, theta[(idx++) % 5]);
+        _delay_ms(2000);
     }
 
     cli(); // Desativa as interrupcoes globais
@@ -100,20 +104,21 @@ int main()
 
 void PWM_setup(void)
 {
-    // GPIO OC1A como output
+    // GPIO OC1A e OC1B como output
     DDRB = (1 << DDB1) | (1 << DDB2);
     PORTB = 0x00;
 
     // Configura o TIMER 1 como FAST PWM com
-    // configuracao do TOp em ICR1 e mudanca do
-    // duty cycle no OCR1A (Prescale de 8)
+    // configuracao do TOP em ICR1 e mudanca do
+    // duty cycle no OCR1A e OCR1B, com o Prescale de 8
+    // do clock
     TCCR1A = (1 << COM1A1) | (1 << COM1B1) | (1 << WGM11);
     TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
 
     ICR1 = TOP_COUNTER_VALUE;
 
     // numero magico para comecar no menor angulo
-    // do servo
+    // dos servos
     OCR1A = 1000;
     OCR1B = 1000;
 }
@@ -146,6 +151,11 @@ uint16_t ADC_read(uint8_t pino)
     return (adc_MSB << 8) | adc_LSB;
 }
 
+uint16_t angle(float a, float b, float theta)
+{
+    return ((theta - b) / a);
+}
+
 void USART_setup(unsigned int ubrr)
 {
     /*Set baud rate */
@@ -155,7 +165,7 @@ void USART_setup(unsigned int ubrr)
     // Enable transmitter
     UCSR0B = (1 << TXEN0);
 
-    /* Set frame format: 8data, 2stop bit */
+    /* Set frame format: 8data, 1 stop bit */
     UCSR0C = (3 << UCSZ00) | (0 << USBS0);
 }
 
